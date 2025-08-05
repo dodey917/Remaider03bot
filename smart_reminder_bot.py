@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 import random
 import json
@@ -140,7 +140,7 @@ def start_smart_reminders(message):
     
     bot.reply_to(message, f"✅ *Smart reminders activated!*\n\n"
                          f"🔔 Interval: {interval//60} minutes\n"
-                         f"📋 Categories: {', '.join(user_data[str(chat_id)]['preferences']['categories']}\n"
+                         f"📋 Categories: {', '.join(user_data[str(chat_id)]['preferences']['categories'])}\n"
                          f"🌙 Quiet hours: {user_data[str(chat_id)]['preferences']['quiet_hours'][0]}:00-"
                          f"{user_data[str(chat_id)]['preferences']['quiet_hours'][1]}:00 UTC",
                 parse_mode='Markdown')
@@ -170,69 +170,43 @@ def run_smart_reminder(chat_id, interval):
             print(f"Error in reminder thread: {e}")
             time.sleep(60)
 
-@bot.message_handler(func=lambda message: message.text == '⚙️ Settings')
-def show_settings(message):
+@bot.message_handler(func=lambda message: message.text == '🛑 Stop Reminders')
+def stop_reminders(message):
     chat_id = message.chat.id
-    initialize_user(chat_id)
-    
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_style = types.InlineKeyboardButton("🔄 Change Frequency", callback_data="set_style")
-    btn_cats = types.InlineKeyboardButton("📋 Message Categories", callback_data="set_categories")
-    btn_tz = types.InlineKeyboardButton("🌐 Timezone", callback_data="set_timezone")
-    btn_quiet = types.InlineKeyboardButton("🌙 Quiet Hours", callback_data="set_quiet_hours")
-    markup.add(btn_style, btn_cats, btn_tz, btn_quiet)
-    
-    prefs = user_data[str(chat_id)]["preferences"]
-    settings_msg = f"""⚙️ *Your Current Settings*
+    if user_data.get(str(chat_id), {}).get("timer"):
+        user_data[str(chat_id)]["timer"].cancel()
+        user_data[str(chat_id)]["reminder_active"] = False
+        user_data[str(chat_id)]["timer"] = None
+        bot.reply_to(message, "🛑 Reminders stopped. All progress reset.")
+    else:
+        bot.reply_to(message, "⚠️ No active reminders to stop")
 
-• 🔄 Frequency: {prefs['style'].title()}
-• 📋 Categories: {', '.join(prefs['categories'])}
-• 🌐 Timezone: {prefs['timezone']}
-• 🌙 Quiet Hours: {prefs['quiet_hours'][0]}:00-{prefs['quiet_hours'][1]}:00 UTC
+class RepeatedTimer:
+    def __init__(self, interval, function, *args, **kwargs):
+        self._timer = None
+        self.interval = interval
+        self.function = function
+        self.args = args
+        self.kwargs = kwargs
+        self.is_running = False
+        self.start()
 
-Select a setting to modify:"""
-    
-    bot.send_message(chat_id, settings_msg, parse_mode='Markdown', reply_markup=markup)
+    def _run(self):
+        self.is_running = False
+        self.start()
+        self.function(*self.args, **self.kwargs)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("set_"))
-def handle_settings_callback(call):
-    chat_id = call.message.chat.id
-    action = call.data.split("_")[1]
-    
-    if action == "style":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        for style in SMART_INTERVALS.keys():
-            markup.add(types.InlineKeyboardButton(style.title(), callback_data=f"setstyle_{style}"))
-        bot.edit_message_text("Select reminder frequency:", chat_id, call.message.message_id, reply_markup=markup)
-    
-    elif action == "categories":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        for cat in MESSAGE_DATABASE.keys():
-            status = "✅" if cat in user_data[str(chat_id)]["preferences"]["categories"] else "❌"
-            markup.add(types.InlineKeyboardButton(f"{status} {cat.title()}", callback_data=f"togglecat_{cat}"))
-        markup.add(types.InlineKeyboardButton("🔙 Back", callback_data="back_to_settings"))
-        bot.edit_message_text("Toggle message categories:", chat_id, call.message.message_id, reply_markup=markup)
-    
-    # Additional setting handlers would go here...
+    def start(self):
+        if not self.is_running:
+            self._timer = threading.Timer(self.interval, self._run)
+            self._timer.start()
+            self.is_running = True
 
-@bot.message_handler(func=lambda message: message.text == '📊 My Stats')
-def show_stats(message):
-    chat_id = message.chat.id
-    initialize_user(chat_id)
-    
-    stats = user_data[str(chat_id)]["stats"]
-    last_active = datetime.fromisoformat(stats["last_active"]).strftime("%Y-%m-%d %H:%M UTC")
-    
-    stats_msg = f"""📊 *Your Reminder Stats*
-
-• 📨 Messages Received: {stats['messages_received']}
-• 🕒 Last Active: {last_active}
-• 🔄 Current Status: {'Active' if user_data[str(chat_id)]['reminder_active'] else 'Inactive'}
-
-ℹ️ These stats help us improve your experience!"""
-    
-    bot.send_message(chat_id, stats_msg, parse_mode='Markdown')
+    def cancel(self):
+        if self._timer:
+            self._timer.cancel()
+        self.is_running = False
 
 if __name__ == '__main__':
-    print("🌟 iFart Smart Reminder Bot is running...")
+    print("iFart Sequential Reminder Bot is running...")
     bot.infinity_polling()
