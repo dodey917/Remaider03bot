@@ -1,2 +1,5 @@
-python-telegram-bot==20.3
+pyTelegramBotAPI==4.16.1
+pytz==2023.3
 python-dotenv==1.0.0
+apscheduler==3.10.1  # For advanced scheduling
+requests==2.31.0     # For potential API integrations
