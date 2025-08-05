@@ -81,13 +81,10 @@ def set_reminder(message):
     # Set interval
     if '10min' in message.text:
         interval = 600
-        interval_text = "10 minutes"
     elif '30min' in message.text:
         interval = 1800
-        interval_text = "30 minutes"
     else:
         interval = 3600
-        interval_text = "1 hour"
     
     # Initialize reminder
     user_data[str(chat_id)].update({
@@ -98,16 +95,21 @@ def set_reminder(message):
     })
     save_user_data()
     
-    # Start reminder thread
+    # Start reminder thread and send first message immediately
     threading.Thread(target=run_reminder, args=(chat_id,)).start()
-    
-    bot.reply_to(message, f"✅ {interval_text} reminders activated!\n\n"
-                         "You'll receive 7 unique messages in sequence, "
-                         "each sent once per reminder cycle.")
+    bot.send_message(chat_id, REMINDER_MESSAGES[0])
+    user_data[str(chat_id)]["current_message_index"] = 1
+    save_user_data()
 
 def run_reminder(chat_id):
     while user_data.get(str(chat_id), {}).get("reminder_active", False):
         try:
+            interval = user_data[str(chat_id)]["reminder_interval"]
+            time.sleep(interval)
+            
+            if not user_data.get(str(chat_id), {}).get("reminder_active", False):
+                break
+                
             # Get current message
             msg_index = user_data[str(chat_id)]["current_message_index"]
             message = REMINDER_MESSAGES[msg_index]
@@ -120,10 +122,6 @@ def run_reminder(chat_id):
             user_data[str(chat_id)]["current_message_index"] = new_index
             user_data[str(chat_id)]["last_reminder_time"] = datetime.now().isoformat()
             save_user_data()
-            
-            # Wait for next interval
-            interval = user_data[str(chat_id)]["reminder_interval"]
-            time.sleep(interval)
             
         except Exception as e:
             print(f"Error in reminder thread: {e}")
