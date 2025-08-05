@@ -1,0 +1,9 @@
+/ifart_bot
+  ├── bot.py          (main bot file)
+  ├── config.py
+  ├── database.py
+  ├── scheduler.py
+  ├── utils/
+  │    └── __init__.py
+  ├── requirements.txt
+  └── .env
